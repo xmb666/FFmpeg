@@ -22,6 +22,7 @@ EXAMPLES=       avio_dir_cmd                       \
                 http_multiclient                   \
                 metadata                           \
                 muxing                             \
+                muxing_with_metadata               \
                 remuxing                           \
                 resampling_audio                   \
                 scaling_video                      \
@@ -35,6 +36,7 @@ avcodec:           LDLIBS += -lm
 decoding_encoding: LDLIBS += -lm
 muxing:            LDLIBS += -lm
 resampling_audio:  LDLIBS += -lm
+muxing_with_metadata: LDLIBS += -lm
 
 .phony: all clean-test clean
 
