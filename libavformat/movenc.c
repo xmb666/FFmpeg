@@ -2631,14 +2631,22 @@ static int mov_write_edts_tag(AVIOContext *pb, MOVMuxContext *mov,
     return size;
 }
 
-static int mov_write_tref_tag(AVIOContext *pb, MOVTrack *track)
+static int mov_write_tref_tag(AVIOContext *pb, MOVMuxContext *mov, MOVTrack *track)
 {
-    avio_wb32(pb, 20);   // size
+    int64_t pos = avio_tell(pb);
+    int i, j;
+    avio_wb32(pb, 0);   // size
     ffio_wfourcc(pb, "tref");
-    avio_wb32(pb, 12);   // size (subatom)
-    avio_wl32(pb, track->tref_tag);
-    avio_wb32(pb, track->tref_id);
-    return 20;
+    for (j = 0; j < track->trefs.nb_trefs; ++j) {
+        int64_t pos_sub = avio_tell(pb);
+        MOVTRef* tref = &track->trefs.trefs[j];
+        avio_wb32(pb, 0);   // size (subatom)
+        avio_wl32(pb, tref->tag);
+        for (i = 0; i < tref->nb_track_ids; i++)
+            avio_wb32(pb, tref->track_ids[i]);
+        update_size(pb, pos_sub);
+    }
+    return update_size(pb, pos);
 }
 
 // goes at the end of each track!  ... Critical for PSP playback ("Incompatible data" without it)
@@ -2749,8 +2757,8 @@ static int mov_write_trak_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContext
                    "Not writing any edit list even though one would have been required\n");
     }
 
-    if (track->tref_tag)
-        mov_write_tref_tag(pb, track);
+    if (track->trefs.nb_trefs)
+        mov_write_tref_tag(pb, mov, track);
 
     if ((ret = mov_write_mdia_tag(s, pb, mov, track)) < 0)
         return ret;
@@ -3487,15 +3495,107 @@ static int mov_setup_track_ids(MOVMuxContext *mov, AVFormatContext *s)
     return 0;
 }
 
+static int mov_tref_copy_from_side_data(MOVMuxContext *mov, MOVTrack *track, AVFormatContext *s)
+{
+    int size;
+    int ret;
+    int i;
+    MOVTRef *tref;
+    int *ref_tracks = NULL;
+
+    char *ptr = (void*) av_stream_get_side_data(track->st,
+                                                AV_PKT_DATA_TRACK_REFERENCES,
+                                                &size);
+    char *end = ptr + size;
+
+    if (!ptr)
+        return 0;
+
+    ret = 0;
+    while (ptr < end) {
+        AVTrackReferences refs;
+        int *track_ids;
+        int cur_size;
+        int next_track_index;
+
+        if (ptr + sizeof(AVTrackReferences) > end) {
+            ret = AVERROR(EINVAL);
+            goto error;
+        }
+
+        // avoid any potential alignment issues by copying the struct before accessing it
+        // to a well-aligned address
+        memcpy(&refs, ptr, sizeof(refs));
+        cur_size = sizeof(AVTrackReferences) + (refs.nb_tracks - 1) * sizeof(refs.tracks[0]);
+
+        if (refs.nb_tracks <= 0 ||
+            ptr + refs.next_tref_ofs > end ||
+            ptr + cur_size > end ||
+            refs.next_tref_ofs < 0 ||
+            (refs.next_tref_ofs > 0 && refs.next_tref_ofs < cur_size)) {
+            ret = AVERROR(EINVAL);
+            goto error;
+        }
+
+        // as well as the ids
+        ref_tracks = av_malloc_array(refs.nb_tracks, sizeof(refs.tracks[0]));
+        if (!ref_tracks)
+            goto error;
+        memcpy(ref_tracks, &((AVTrackReferences*) ptr)->tracks, sizeof(refs.tracks[0]) * refs.nb_tracks);
+
+        ret = ff_mov_tref_find_or_add(&track->trefs,
+                                      MKTAG(refs.tag[0], refs.tag[1], refs.tag[2], refs.tag[3]),
+                                      &tref);
+        if (ret < 0)
+            goto error;
+
+        ret = ff_mov_tref_alloc(tref, refs.nb_tracks, &track_ids);
+        if (ret < 0)
+            goto error;
+
+        next_track_index = 0;
+        for (i = 0; i < refs.nb_tracks; i++) {
+            int tref_stream_id = ref_tracks[i];
+            int stream_idx;
+            int found = 0;
+            for (stream_idx = 0; stream_idx < mov->nb_streams && !found; ++stream_idx)
+                if (mov->tracks[stream_idx].st &&
+                    mov->tracks[stream_idx].st->id == tref_stream_id) {
+                    track_ids[next_track_index] = mov->tracks[stream_idx].track_id;
+                    found = 1;
+                }
+            if (found)
+                next_track_index++;
+            else
+                tref->nb_track_ids--;
+        }
+
+        ptr += refs.next_tref_ofs;
+
+        av_free(ref_tracks);
+        if (refs.next_tref_ofs == 0)
+            break;
+    }
+    return 0;
+error:
+    av_free(ref_tracks);
+    return ret;
+}
+
 static int mov_write_moov_tag(AVIOContext *pb, MOVMuxContext *mov,
                               AVFormatContext *s)
 {
     int i;
     int64_t pos = avio_tell(pb);
+    int ret;
     avio_wb32(pb, 0); /* size placeholder*/
     ffio_wfourcc(pb, "moov");
 
     mov_setup_track_ids(mov, s);
+
+    for (i = 0; i < mov->nb_streams; i++)
+        if (mov->tracks[i].st)
+            mov_tref_copy_from_side_data(mov, &mov->tracks[i], s);
 
     for (i = 0; i < mov->nb_streams; i++) {
         if (mov->tracks[i].entry <= 0 && !(mov->flags & FF_MOV_FLAG_FRAGMENT))
@@ -3508,34 +3608,42 @@ static int mov_write_moov_tag(AVIOContext *pb, MOVMuxContext *mov,
     }
 
     if (mov->chapter_track)
-        for (i = 0; i < s->nb_streams; i++) {
-            mov->tracks[i].tref_tag = MKTAG('c','h','a','p');
-            mov->tracks[i].tref_id  = mov->tracks[mov->chapter_track].track_id;
-        }
+        for (i = 0; i < s->nb_streams; i++)
+            if (!ff_codec_get_id(ff_codec_metadata_tags, mov->tracks[i].tag)) {
+                ret = ff_mov_tref_add_one_track(&mov->tracks[i].trefs, MKTAG('c','h','a','p'), mov->chapter_track);
+                if (ret < 0)
+                    return ret;
+            }
     for (i = 0; i < mov->nb_streams; i++) {
         MOVTrack *track = &mov->tracks[i];
         if (track->tag == MKTAG('r','t','p',' ')) {
-            track->tref_tag = MKTAG('h','i','n','t');
-            track->tref_id = mov->tracks[track->src_track].track_id;
+            ret = ff_mov_tref_add_one_track(&mov->tracks[i].trefs, MKTAG('h','i','n','t'), mov->tracks[track->src_track].track_id);
+            if (ret < 0)
+                return ret;
         } else if (track->par->codec_type == AVMEDIA_TYPE_AUDIO) {
             int * fallback, size;
             fallback = (int*)av_stream_get_side_data(track->st,
                                                      AV_PKT_DATA_FALLBACK_TRACK,
                                                      &size);
-            if (fallback != NULL && size == sizeof(int)) {
-                if (*fallback >= 0 && *fallback < mov->nb_streams) {
-                    track->tref_tag = MKTAG('f','a','l','l');
-                    track->tref_id = mov->tracks[*fallback].track_id;
-                }
+            if (fallback != NULL && size == sizeof(int) &&
+                *fallback >= 0 && *fallback < mov->nb_streams) {
+                ret = ff_mov_tref_add_one_track(&track->trefs, MKTAG('f','a','l','l'), *fallback);
+                if (ret < 0)
+                    return ret;
             }
         }
     }
     for (i = 0; i < mov->nb_streams; i++) {
         if (mov->tracks[i].tag == MKTAG('t','m','c','d')) {
             int src_trk = mov->tracks[i].src_track;
-            mov->tracks[src_trk].tref_tag = mov->tracks[i].tag;
-            mov->tracks[src_trk].tref_id  = mov->tracks[i].track_id;
-            //src_trk may have a different timescale than the tmcd track
+
+             ret = ff_mov_tref_add_one_track(&mov->tracks[src_trk].trefs,
+                                          mov->tracks[i].tag,
+                                          mov->tracks[i].track_id);
+             if (ret < 0)
+                 return ret;
+
+             //src_trk may have a different timescale than the tmcd track
             mov->tracks[i].track_duration = av_rescale(mov->tracks[src_trk].track_duration,
                                                        mov->tracks[i].timescale,
                                                        mov->tracks[src_trk].timescale);
@@ -5346,6 +5454,7 @@ static void mov_free(AVFormatContext *s)
             av_freep(&mov->tracks[i].vos_data);
 
         ff_mov_cenc_free(&mov->tracks[i].cenc);
+        ff_mov_tref_free(&mov->tracks[i].trefs);
     }
 
     av_freep(&mov->tracks);
