@@ -26,6 +26,7 @@
 
 #include "avformat.h"
 #include "movenccenc.h"
+#include "movtref.h"
 
 #define MOV_FRAG_INFO_ALLOC_INCREMENT 64
 #define MOV_INDEX_CLUSTER_SIZE 1024
@@ -110,8 +111,8 @@ typedef struct MOVTrack {
     unsigned    cluster_capacity;
     int         audio_vbr;
     int         height; ///< active picture (w/o VBI) height for D-10/IMX
-    uint32_t    tref_tag;
-    int         tref_id; ///< trackID of the referenced track
+
+    MOVTRefs    trefs;
     int64_t     start_dts;
     int64_t     start_cts;
     int64_t     end_pts;
