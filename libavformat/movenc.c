@@ -1470,6 +1470,8 @@ static int mov_get_codec_tag(AVFormatContext *s, MOVTrack *track)
             }
         } else if (track->par->codec_type == AVMEDIA_TYPE_SUBTITLE)
             tag = ff_codec_get_tag(ff_codec_movsubtitle_tags, track->par->codec_id);
+        else if (track->par->codec_type == AVMEDIA_TYPE_DATA)
+            tag = ff_codec_get_tag(ff_codec_metadata_tags, track->par->codec_id);
     }
 
     return tag;
@@ -2242,6 +2244,9 @@ static int mov_write_hdlr_tag(AVFormatContext *s, AVIOContext *pb, MOVTrack *tra
         } else if (track->par->codec_tag == MKTAG('t','m','c','d')) {
             hdlr_type = "tmcd";
             descr = "TimeCodeHandler";
+        } else if (track->par->codec_type == AVMEDIA_TYPE_DATA) {
+            hdlr_type = "meta";
+            descr     = "DataHandler";
         } else {
             char tag_buf[32];
             av_get_codec_tag_string(tag_buf, sizeof(tag_buf),
@@ -5308,6 +5313,7 @@ static void enable_tracks(AVFormatContext *s)
         case AVMEDIA_TYPE_VIDEO:
         case AVMEDIA_TYPE_AUDIO:
         case AVMEDIA_TYPE_SUBTITLE:
+        case AVMEDIA_TYPE_DATA:
             if (enabled[i] > 1)
                 mov->per_stream_grouping = 1;
             if (!enabled[i] && first[i] >= 0)
@@ -6110,6 +6116,7 @@ AVOutputFormat ff_mov_muxer = {
     .audio_codec       = AV_CODEC_ID_AAC,
     .video_codec       = CONFIG_LIBX264_ENCODER ?
                          AV_CODEC_ID_H264 : AV_CODEC_ID_MPEG4,
+    .data_codec        = AV_CODEC_ID_META,
     .write_header      = mov_write_header,
     .write_packet      = mov_write_packet,
     .write_trailer     = mov_write_trailer,
@@ -6129,6 +6136,7 @@ AVOutputFormat ff_tgp_muxer = {
     .priv_data_size    = sizeof(MOVMuxContext),
     .audio_codec       = AV_CODEC_ID_AMR_NB,
     .video_codec       = AV_CODEC_ID_H263,
+    .data_codec        = AV_CODEC_ID_META,
     .write_header      = mov_write_header,
     .write_packet      = mov_write_packet,
     .write_trailer     = mov_write_trailer,
@@ -6148,6 +6156,7 @@ AVOutputFormat ff_mp4_muxer = {
     .audio_codec       = AV_CODEC_ID_AAC,
     .video_codec       = CONFIG_LIBX264_ENCODER ?
                          AV_CODEC_ID_H264 : AV_CODEC_ID_MPEG4,
+    .data_codec        = AV_CODEC_ID_META,
     .write_header      = mov_write_header,
     .write_packet      = mov_write_packet,
     .write_trailer     = mov_write_trailer,
@@ -6166,6 +6175,7 @@ AVOutputFormat ff_psp_muxer = {
     .audio_codec       = AV_CODEC_ID_AAC,
     .video_codec       = CONFIG_LIBX264_ENCODER ?
                          AV_CODEC_ID_H264 : AV_CODEC_ID_MPEG4,
+    .data_codec        = AV_CODEC_ID_META,
     .write_header      = mov_write_header,
     .write_packet      = mov_write_packet,
     .write_trailer     = mov_write_trailer,
@@ -6183,6 +6193,7 @@ AVOutputFormat ff_tg2_muxer = {
     .priv_data_size    = sizeof(MOVMuxContext),
     .audio_codec       = AV_CODEC_ID_AMR_NB,
     .video_codec       = AV_CODEC_ID_H263,
+    .data_codec        = AV_CODEC_ID_META,
     .write_header      = mov_write_header,
     .write_packet      = mov_write_packet,
     .write_trailer     = mov_write_trailer,
@@ -6201,6 +6212,7 @@ AVOutputFormat ff_ipod_muxer = {
     .priv_data_size    = sizeof(MOVMuxContext),
     .audio_codec       = AV_CODEC_ID_AAC,
     .video_codec       = AV_CODEC_ID_H264,
+    .data_codec        = AV_CODEC_ID_META,
     .write_header      = mov_write_header,
     .write_packet      = mov_write_packet,
     .write_trailer     = mov_write_trailer,
@@ -6219,6 +6231,7 @@ AVOutputFormat ff_ismv_muxer = {
     .priv_data_size    = sizeof(MOVMuxContext),
     .audio_codec       = AV_CODEC_ID_AAC,
     .video_codec       = AV_CODEC_ID_H264,
+    .data_codec        = AV_CODEC_ID_META,
     .write_header      = mov_write_header,
     .write_packet      = mov_write_packet,
     .write_trailer     = mov_write_trailer,
@@ -6237,6 +6250,7 @@ AVOutputFormat ff_f4v_muxer = {
     .priv_data_size    = sizeof(MOVMuxContext),
     .audio_codec       = AV_CODEC_ID_AAC,
     .video_codec       = AV_CODEC_ID_H264,
+    .data_codec        = AV_CODEC_ID_META,
     .write_header      = mov_write_header,
     .write_packet      = mov_write_packet,
     .write_trailer     = mov_write_trailer,
