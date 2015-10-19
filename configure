@@ -1459,6 +1459,7 @@ EXAMPLE_LIST="
     filtering_video_example
     metadata_example
     muxing_example
+    muxing_with_metadata_example
     qsvdec_example
     remuxing_example
     resampling_audio_example
@@ -3095,6 +3096,7 @@ filtering_audio_example_deps="avfilter avcodec avformat avutil"
 filtering_video_example_deps="avfilter avcodec avformat avutil"
 metadata_example_deps="avformat avutil"
 muxing_example_deps="avcodec avformat avutil swscale"
+muxing_with_metadata_example_deps="avcodec avformat avutil swscale"
 qsvdec_example_deps="avcodec avutil libmfx h264_qsv_decoder vaapi_x11"
 remuxing_example_deps="avcodec avformat avutil"
 resampling_audio_example_deps="avutil swresample"
