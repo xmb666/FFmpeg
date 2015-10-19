@@ -1348,6 +1348,13 @@ typedef struct AVCPBProperties {
  * Types and functions for working with AVPacket.
  * @{
  */
+
+typedef struct AVTrackReferences {
+    char        tag[4];         /** 4cc used for describing this  */
+    int         nb_tracks;      /** number of tracks */
+    /** followed by: int tracks[nb_tracks]; -- tracks this track refers to */
+} AVTrackReferences;
+
 enum AVPacketSideDataType {
     AV_PKT_DATA_PALETTE,
 
@@ -1525,7 +1532,15 @@ enum AVPacketSideDataType {
      * should be associated with a video stream and containts data in the form
      * of the AVMasteringDisplayMetadata struct.
      */
-    AV_PKT_DATA_MASTERING_DISPLAY_METADATA
+    AV_PKT_DATA_MASTERING_DISPLAY_METADATA,
+
+    /**
+     * Define track references (in particular applicaple for ISO MP4
+     * files). The data is a sequence of type AVTrackReferences
+     * (including the track list that follows it), for as long as
+     * indicated by the key's length.
+     */
+    AV_PKT_DATA_TRACK_REFERENCES
 };
 
 #define AV_PKT_DATA_QUALITY_FACTOR AV_PKT_DATA_QUALITY_STATS //DEPRECATED

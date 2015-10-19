@@ -78,6 +78,12 @@ typedef struct MOVFragmentInfo {
     int size;
 } MOVFragmentInfo;
 
+typedef struct MOVTRef {
+    uint32_t tag;
+    int      nb_ids;
+    int*     ids;
+} MOVTRef;
+
 typedef struct MOVTrack {
     int         mode;
     int         entry;
@@ -110,15 +116,16 @@ typedef struct MOVTrack {
     unsigned    cluster_capacity;
     int         audio_vbr;
     int         height; ///< active picture (w/o VBI) height for D-10/IMX
-    uint32_t    tref_tag;
-    int         tref_id; ///< trackID of the referenced track
+    MOVTRef*    trefs;
+    int         nb_trefs;
     int64_t     start_dts;
     int64_t     start_cts;
     int64_t     end_pts;
     int         end_reliable;
 
     int         hint_track;   ///< the track that hints this track, -1 if no hint track is set
-    int         src_track;    ///< the track that this hint (or tmcd) track describes
+    int         nb_src_tracks;  ///< number of src tracks
+    int         *src_tracks;    ///< the tracks that this hint (or tmcd or cdsc) track describes
     AVFormatContext *rtp_ctx; ///< the format context for the hinting rtp muxer
     uint32_t    prev_rtp_ts;
     int64_t     cur_rtp_ts_unwrapped;
@@ -247,5 +254,53 @@ int ff_mov_add_hinted_packet(AVFormatContext *s, AVPacket *pkt,
                              int track_index, int sample,
                              uint8_t *sample_data, int sample_size);
 void ff_mov_close_hinting(MOVTrack *track);
+
+/**
+ * @brief Finds a track reference of certain tag from a track; if not
+ * found, return NULL
+ *
+ * @param track The track to search from
+ * @param tag The tag (4cc) to search for
+ * @return a MOVTRef describing the track reference or NULL if not found.
+ */
+MOVTRef *ff_mov_find_tref(MOVTrack *track, uint32_t tag);
+
+/**
+ * @brief Finds a track reference of certain tag from a track; if not
+ * found, create an empty track reference object for the track put it
+ * into the track.
+ *
+ * @param track The track to search from
+ * @param tag The tag (4cc) to search for
+ * @param tref_ret A pointer to the the found or created tref is
+ *                 returned here. Must not be NULL.
+ * @return Zero on success, an AVERROR error code on failure. On error
+ *         no modifications have been performed.
+ */
+int ff_mov_find_or_add_tref(MOVTrack *track, uint32_t tag, MOVTRef **tref_ret);
+
+/**
+ * @brief Adds a a track to a track reference that may or may not be
+ * put into a track
+ *
+ * @param tref The track reference to add the track for
+ * @param tag The tag (4cc) of the track reference
+ * @return Zero on success, an AVERROR error code on failure. On error
+ *         no modifications have been performed.
+ */
+int ff_mov_add_tref_track(MOVTRef *tref, int id);
+
+/**
+ * @brief Copies track->src_tracks from a track to the give tref
+ *
+ * @param mov The MOV muxer context
+ * @param track The track to take the src_tracks from
+ * @param tref The tref to translate the src_tracks into
+ * @return Zero on success, an AVERROR error code on failure. On error
+ *         no modifications have been performed. However, probably
+ *         prior to this call src_tracks has been manipulated and now
+ *         it is out-of-sync, so this is pretty fatal.
+ */
+int ff_mov_map_trefs_from_src_tracks(MOVMuxContext *mov, MOVTrack *track, MOVTRef *tref);
 
 #endif /* AVFORMAT_MOVENC_H */

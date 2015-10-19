@@ -32,10 +32,17 @@ int ff_mov_init_hinting(AVFormatContext *s, int index, int src_index)
     MOVTrack *track     = &mov->tracks[index];
     MOVTrack *src_track = &mov->tracks[src_index];
     AVStream *src_st    = s->streams[src_index];
-    int ret = AVERROR(ENOMEM);
+    int ret;
 
     track->tag = MKTAG('r','t','p',' ');
-    track->src_track = src_index;
+    ret = av_reallocp_array(&track->src_tracks,
+                            track->nb_src_tracks + 1,
+                            sizeof(*track->src_tracks));
+    if (ret != 0)
+        goto fail;
+    ret = AVERROR(ENOMEM); /* default error for the rest of the errors */
+    track->src_tracks[track->nb_src_tracks] = src_index;
+    track->nb_src_tracks++;
 
     track->par = avcodec_parameters_alloc();
     if (!track->par)
