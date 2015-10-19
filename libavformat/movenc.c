@@ -1470,6 +1470,8 @@ static int mov_get_codec_tag(AVFormatContext *s, MOVTrack *track)
             }
         } else if (track->par->codec_type == AVMEDIA_TYPE_SUBTITLE)
             tag = ff_codec_get_tag(ff_codec_movsubtitle_tags, track->par->codec_id);
+        else if (track->par->codec_type == AVMEDIA_TYPE_DATA)
+            tag = ff_codec_get_tag(ff_codec_metadata_tags, track->par->codec_id);
     }
 
     return tag;
@@ -2242,6 +2244,9 @@ static int mov_write_hdlr_tag(AVFormatContext *s, AVIOContext *pb, MOVTrack *tra
         } else if (track->par->codec_tag == MKTAG('t','m','c','d')) {
             hdlr_type = "tmcd";
             descr = "TimeCodeHandler";
+        } else if (track->par->codec_type == AVMEDIA_TYPE_DATA) {
+            hdlr_type = "meta";
+            descr     = "DataHandler";
         } else {
             char tag_buf[32];
             av_get_codec_tag_string(tag_buf, sizeof(tag_buf),
@@ -5308,6 +5313,7 @@ static void enable_tracks(AVFormatContext *s)
         case AVMEDIA_TYPE_VIDEO:
         case AVMEDIA_TYPE_AUDIO:
         case AVMEDIA_TYPE_SUBTITLE:
+        case AVMEDIA_TYPE_DATA:
             if (enabled[i] > 1)
                 mov->per_stream_grouping = 1;
             if (!enabled[i] && first[i] >= 0)
