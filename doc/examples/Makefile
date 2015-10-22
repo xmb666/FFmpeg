@@ -16,6 +16,7 @@ EXAMPLES=       avio_dir_cmd                       \
                 decoding_encoding                  \
                 demuxing_decoding                  \
                 extract_mvs                        \
+                extract_timed_metadata             \
                 filtering_video                    \
                 filtering_audio                    \
                 http_multiclient                   \

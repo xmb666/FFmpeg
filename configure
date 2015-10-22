@@ -1453,6 +1453,7 @@ EXAMPLE_LIST="
     decoding_encoding_example
     demuxing_decoding_example
     extract_mvs_example
+    extract_timed_metadata_example
     filter_audio_example
     filtering_audio_example
     filtering_video_example
@@ -3088,6 +3089,7 @@ avio_reading="avformat avcodec avutil"
 decoding_encoding_example_deps="avcodec avformat avutil"
 demuxing_decoding_example_deps="avcodec avformat avutil"
 extract_mvs_example_deps="avcodec avformat avutil"
+extract_timed_metadata_example_deps="avcodec avformat avutil"
 filter_audio_example_deps="avfilter avutil"
 filtering_audio_example_deps="avfilter avcodec avformat avutil"
 filtering_video_example_deps="avfilter avcodec avformat avutil"
