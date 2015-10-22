@@ -2259,6 +2259,7 @@ int ff_mov_read_stsd_entries(MOVContext *c, AVIOContext *pb, int entries)
                 (format >> 0) & 0xff, (format >> 8) & 0xff, (format >> 16) & 0xff,
                 (format >> 24) & 0xff, format, st->codecpar->codec_type);
 
+        ret = 0;
         if (st->codecpar->codec_type==AVMEDIA_TYPE_VIDEO) {
             st->codecpar->codec_id = id;
             mov_parse_stsd_video(c, pb, st, sc);
@@ -2269,12 +2270,16 @@ int ff_mov_read_stsd_entries(MOVContext *c, AVIOContext *pb, int entries)
             st->codecpar->codec_id = id;
             mov_parse_stsd_subtitle(c, pb, st, sc,
                                     size - (avio_tell(pb) - start_pos));
+        } else if (st->codecpar->codec_type==AVMEDIA_TYPE_DATA){
+            st->codecpar->codec_id = id;
+            ret = mov_parse_stsd_data(c, pb, st, sc,
+                                      size - (avio_tell(pb) - start_pos));
         } else {
             ret = mov_parse_stsd_data(c, pb, st, sc,
                                       size - (avio_tell(pb) - start_pos));
-            if (ret < 0)
-                return ret;
         }
+        if (ret < 0)
+            return ret;
         /* this will read extra atoms at the end (wave, alac, damr, avcC, hvcC, SMI ...) */
         a.size = size - (avio_tell(pb) - start_pos);
         if (a.size > 8) {
