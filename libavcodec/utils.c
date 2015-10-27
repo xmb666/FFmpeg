@@ -2955,6 +2955,25 @@ int attribute_align_arg avcodec_receive_packet(AVCodecContext *avctx, AVPacket *
     return 0;
 }
 
+AVData *avdata_alloc(void)
+{
+    AVData *data = av_mallocz(sizeof(*data));
+
+    if (!data)
+        return NULL;
+
+    return data;
+}
+
+void avdata_free(AVData *data)
+{
+    av_buffer_unref(&data->data);
+
+    memset(data, 0, sizeof(AVData));
+
+    av_free(data);
+}
+
 av_cold int avcodec_close(AVCodecContext *avctx)
 {
     int i;

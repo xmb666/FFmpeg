@@ -3934,6 +3934,14 @@ typedef struct AVSubtitle {
     int64_t pts;    ///< Same as packet pts, in AV_TIME_BASE
 } AVSubtitle;
 
+typedef struct AVData {
+    uint16_t format; /** 0 = timed metadata */
+    int64_t pts;
+    int64_t dts;
+
+    AVBufferRef *data;
+} AVData;
+
 /**
  * This struct describes the properties of an encoded stream.
  *
@@ -4315,6 +4323,18 @@ int avcodec_close(AVCodecContext *avctx);
  * @param sub AVSubtitle to free.
  */
 void avsubtitle_free(AVSubtitle *sub);
+
+/**
+ * Allocate an empty data (typically use with timed metadata)
+ */
+AVData *avdata_alloc(void);
+
+/**
+ * Free all allocated data in the given data struct.
+ *
+ * @param sub AVData to free.
+ */
+void avdata_free(AVData *sub);
 
 /**
  * @}
