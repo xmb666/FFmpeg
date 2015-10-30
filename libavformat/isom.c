@@ -66,6 +66,7 @@ const AVCodecTag ff_mp4_obj_type[] = {
     { AV_CODEC_ID_QCELP       , 0xE1 },
     { AV_CODEC_ID_MPEG4SYSTEMS, 0x01 },
     { AV_CODEC_ID_MPEG4SYSTEMS, 0x02 },
+    { AV_CODEC_ID_META        , 0x03 },
     { AV_CODEC_ID_NONE        ,    0 },
 };
 
