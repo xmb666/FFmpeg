@@ -3157,6 +3157,48 @@ static void fix_timescale(MOVContext *c, MOVStreamContext *sc)
     }
 }
 
+static int mov_read_tref(MOVContext *c, AVIOContext *pb, MOVAtom atom)
+{
+    uint32_t size = avio_rb32(pb);
+    AVStream *st;
+    MOVStreamContext *sc;
+    int ret;
+
+    if (c->fc->nb_streams < 1)
+        return 0;
+
+    st = c->fc->streams[c->fc->nb_streams-1];
+    sc = st->priv_data;
+
+    if (size < 12 || size > atom.size) {
+        avio_seek(pb, -4, SEEK_CUR);
+        return mov_read_default(c, pb, atom);
+    } else {
+        int remaining = size - 4;
+
+        if (remaining % 4 != 0)
+            return AVERROR_INVALIDDATA;
+
+        /* an arbitrary upper limit to prevent wasting all memory to this */
+        if (remaining > 4 * 256)
+            remaining = 4 * 256;
+
+        ret = av_reallocp_array(&sc->tref_ids, remaining  / 4, sizeof(*sc->tref_ids));
+        if (ret != 0)
+            return ret;
+
+        sc->tref_tag = avio_rl32(pb);
+        remaining -= 4;
+        while (remaining > 0) {
+            sc->tref_ids[sc->nb_tref_ids] = avio_rb32(pb);
+            sc->nb_tref_ids++;
+            remaining -= 4;
+        }
+        avio_seek(pb, remaining, SEEK_CUR);
+        return ret;
+    }
+}
+
 static int mov_read_trak(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 {
     AVStream *st;
@@ -4414,7 +4456,7 @@ static const MOVParseTableEntry mov_default_parse_table[] = {
 { MKTAG('t','f','h','d'), mov_read_tfhd }, /* track fragment header */
 { MKTAG('t','r','a','k'), mov_read_trak },
 { MKTAG('t','r','a','f'), mov_read_default },
-{ MKTAG('t','r','e','f'), mov_read_default },
+{ MKTAG('t','r','e','f'), mov_read_tref },
 { MKTAG('t','m','c','d'), mov_read_tmcd },
 { MKTAG('c','h','a','p'), mov_read_chap },
 { MKTAG('t','r','e','x'), mov_read_trex },
@@ -4832,6 +4874,8 @@ static int mov_read_close(AVFormatContext *s)
         av_freep(&sc->cenc.auxiliary_info);
         av_freep(&sc->cenc.auxiliary_info_sizes);
         av_aes_ctr_free(sc->cenc.aes_ctr);
+
+        av_freep(&sc->tref_ids);
     }
 
     if (mov->dv_demux) {
