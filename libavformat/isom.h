@@ -27,6 +27,8 @@
 #include "avio.h"
 #include "internal.h"
 #include "dv.h"
+#include "movmeta.h"
+#include "movtref.h"
 
 /* isom.c */
 extern const AVCodecTag ff_mp4_obj_type[];
@@ -168,6 +170,7 @@ typedef struct MOVStreamContext {
     int start_pad;        ///< amount of samples to skip due to enc-dec delay
     unsigned int rap_group_count;
     MOVSbgp *rap_group;
+    MOVTRefs trefs;
 
     int nb_frames_for_fps;
     int64_t duration_for_fps;

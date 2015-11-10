@@ -3157,6 +3157,121 @@ static void fix_timescale(MOVContext *c, MOVStreamContext *sc)
     }
 }
 
+static int mov_read_tref_subatom(MOVContext *c, AVIOContext *pb, MOVTRefs *trefs)
+{
+    uint32_t tref_tag;
+    MOVTRef *tref;
+    int tref_ids_size;
+    int *tref_ids;
+    int ret;
+
+    tref_ids_size = avio_rb32(pb);
+    if (tref_ids_size % 4 != 0)
+        return AVERROR_INVALIDDATA;
+    tref_ids_size -= 4;
+
+    tref_tag = avio_rl32(pb);
+    tref_ids_size -= 4;
+    if (tref_ids_size < 4)
+        return AVERROR_INVALIDDATA;
+
+    ret = ff_mov_tref_find_or_add(trefs, tref_tag, &tref);
+    if (ret != 0)
+        return ret;
+
+    ff_mov_tref_alloc(tref, tref_ids_size / 4, &tref_ids);
+    if (ret != 0)
+        return ret;
+
+    while (tref_ids_size) {
+        *tref_ids = avio_rb32(pb);
+        ++tref_ids;
+        tref_ids_size -= 4;
+    }
+
+    return ret;
+}
+
+static int mov_tref_copy_to_side_data(AVStream *st, MOVTRefs *trefs)
+{
+    if (trefs->nb_trefs) {
+        int i;
+        char *trefs_side_ptr;
+        int end_offset = 0;
+        int offset = 0;
+        AVTrackReferences *trefs_side_prev = NULL;
+
+        for (i = 0; i < trefs->nb_trefs; ++i) {
+            MOVTRef *tref = &trefs->trefs[i];
+            if (tref->nb_track_ids > 0)
+                // Ensure the returned data is easy to access without
+                // worrying about alignment, even if it wastes some memory
+                end_offset = FFALIGN(end_offset + sizeof(AVTrackReferences) +
+                                     sizeof(int) * (tref->nb_track_ids - 1),
+                                     sizeof(AVTrackReferences));
+        }
+
+        trefs_side_ptr = (void*) av_stream_new_side_data(st,
+                                                         AV_PKT_DATA_TRACK_REFERENCES,
+                                                         end_offset);
+        if (!trefs_side_ptr)
+            return AVERROR(ENOMEM);
+
+        for (i = 0; i < trefs->nb_trefs; ++i) {
+            MOVTRef *tref = &trefs->trefs[i];
+            if (tref->nb_track_ids > 0) {
+                AVTrackReferences *trefs_side = (AVTrackReferences*) (trefs_side_ptr + offset);
+                int *trefs_tracks;
+
+                trefs_side->nb_tracks = tref->nb_track_ids;
+                trefs_side->tag[0] = (tref->tag >>  0) & 0xff;
+                trefs_side->tag[1] = (tref->tag >>  8) & 0xff;
+                trefs_side->tag[2] = (tref->tag >> 16) & 0xff;
+                trefs_side->tag[3] = (tref->tag >> 24) & 0xff;
+                trefs_tracks = trefs_side->tracks;
+                for (i = 0; i < tref->nb_track_ids; ++i) {
+                    trefs_tracks[i] = tref->track_ids[i];
+                }
+
+                if (trefs_side_prev)
+                    trefs_side_prev->next_tref_ofs = (char*) trefs_side - (char*) trefs_side_prev;
+                trefs_side_prev = trefs_side;
+                offset = FFALIGN(end_offset + sizeof(AVTrackReferences) +
+                                 sizeof(int) * (tref->nb_track_ids - 1),
+                                 sizeof(AVTrackReferences));
+            }
+        }
+    }
+
+    return 0;
+}
+
+static int mov_read_tref(MOVContext *c, AVIOContext *pb, MOVAtom atom)
+{
+    AVStream *st;
+    MOVStreamContext *sc;
+    int64_t end = avio_tell(pb) + atom.size;
+
+    if (c->fc->nb_streams < 1)
+        return 0;
+
+    st = c->fc->streams[c->fc->nb_streams-1];
+    sc = st->priv_data;
+
+    if (atom.size < 12) {
+        return mov_read_default(c, pb, atom);
+    } else {
+        int ret = 0;
+        while (end - avio_tell(pb) > 0 && ret == 0) {
+            ret = mov_read_tref_subatom(c, pb, &sc->trefs);
+        }
+        mov_tref_copy_to_side_data(st, &sc->trefs);
+        avio_seek(pb, end, SEEK_SET);
+    }
+
+    return 0;
+}
+
 static int mov_read_trak(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 {
     AVStream *st;
@@ -4414,7 +4529,7 @@ static const MOVParseTableEntry mov_default_parse_table[] = {
 { MKTAG('t','f','h','d'), mov_read_tfhd }, /* track fragment header */
 { MKTAG('t','r','a','k'), mov_read_trak },
 { MKTAG('t','r','a','f'), mov_read_default },
-{ MKTAG('t','r','e','f'), mov_read_default },
+{ MKTAG('t','r','e','f'), mov_read_tref },
 { MKTAG('t','m','c','d'), mov_read_tmcd },
 { MKTAG('c','h','a','p'), mov_read_chap },
 { MKTAG('t','r','e','x'), mov_read_trex },
@@ -4832,6 +4947,8 @@ static int mov_read_close(AVFormatContext *s)
         av_freep(&sc->cenc.auxiliary_info);
         av_freep(&sc->cenc.auxiliary_info_sizes);
         av_aes_ctr_free(sc->cenc.aes_ctr);
+
+        ff_mov_tref_free(&sc->trefs);
     }
 
     if (mov->dv_demux) {
