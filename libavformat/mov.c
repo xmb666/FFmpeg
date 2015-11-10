@@ -1789,12 +1789,18 @@ static int mov_codec_id(AVStream *st, uint32_t format)
             id = ff_codec_get_id(ff_codec_bmp_tags, format);
         if (id > 0)
             st->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
-        else if (st->codecpar->codec_type == AVMEDIA_TYPE_DATA ||
-                    (st->codecpar->codec_type == AVMEDIA_TYPE_SUBTITLE &&
-                    st->codecpar->codec_id == AV_CODEC_ID_NONE)) {
-            id = ff_codec_get_id(ff_codec_movsubtitle_tags, format);
-            if (id > 0)
-                st->codecpar->codec_type = AVMEDIA_TYPE_SUBTITLE;
+        else {
+            if (st->codecpar->codec_type == AVMEDIA_TYPE_DATA ||
+                (st->codecpar->codec_type == AVMEDIA_TYPE_SUBTITLE &&
+                 st->codecpar->codec_id == AV_CODEC_ID_NONE)) {
+                id = ff_codec_get_id(ff_codec_movsubtitle_tags, format);
+                if (id > 0)
+                    st->codecpar->codec_type = AVMEDIA_TYPE_SUBTITLE;
+            }
+            if (id <= 0 &&
+                st->codecpar->codec_type == AVMEDIA_TYPE_DATA) {
+                id = ff_codec_get_id(ff_codec_metadata_tags, format);
+            }
         }
     }
 
