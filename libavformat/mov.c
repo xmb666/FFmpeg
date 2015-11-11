@@ -2039,6 +2039,145 @@ static int mov_rewrite_dvd_sub_extradata(AVStream *st)
     return 0;
 }
 
+static int mov_parse_urim_uri_data(AVIOContext *pb, AVStream *st, MOVMeta *meta)
+{
+    int64_t size = avio_rb32(pb);
+    uint32_t uri = avio_rb32(pb); /* "uri " */
+    avio_r8(pb);                  /* version */
+    avio_rb24(pb);                /* flags */
+
+    if (size < 12 || size >= 1024)
+        return AVERROR(ENOMEM);
+
+    if (uri == AV_RB32("uri ")) {
+        int remaining = size - 12;
+        int64_t pos = avio_tell(pb);
+        uint32_t string_len = 0;
+
+        while (string_len < remaining && avio_r8(pb) != 0) {
+            ++string_len;
+        }
+        avio_seek(pb, pos, SEEK_SET);
+
+        if (string_len >= remaining)
+            return AVERROR_INVALIDDATA;
+
+        meta->tag = MKTAG('u', 'r', 'i', 'm');
+        meta->data = av_malloc(string_len + 1);
+        if (!meta->data)
+            return AVERROR(ENOMEM);
+
+        avio_read(pb, meta->data, string_len);
+        ((char*) meta->data)[string_len] = 0;
+        meta->length = string_len;
+        remaining -= string_len;
+        avio_r8(pb);            /* read the null terminator */
+        remaining--;
+
+        avio_skip(pb, remaining);
+    } else {
+        avio_skip(pb, size - 12);
+    }
+
+    return 0;
+}
+
+static int mov_parse_urim_conf_data(AVIOContext *pb, AVStream *st, int64_t remaining, MOVMeta *meta)
+{
+    int64_t size;
+    uint32_t tag;
+    int64_t data_size;
+
+    if (remaining < 12)
+        return 0;
+
+    size = avio_rb32(pb);
+    tag = avio_rl32(pb);
+    avio_r8(pb);                /* version */
+    avio_rb24(pb);              /* flags */
+    remaining -= 12;
+    data_size = size - 12;
+
+    if (data_size < 0 || data_size > remaining) {
+        avio_skip(pb, remaining);
+        return 0;
+    }
+
+    meta->conf.data = av_malloc(data_size);
+    if (!meta->conf.data)
+        return AVERROR(ENOMEM);
+
+    meta->conf.tag = tag;
+    meta->conf.length = data_size;
+    avio_read(pb, meta->conf.data, data_size);
+    remaining -= data_size;
+    avio_skip(pb, remaining);
+
+    return 0;
+}
+
+static int mov_parse_urim_data(AVIOContext *pb, AVStream *st, int64_t remaining)
+{
+    int64_t pos = avio_tell(pb);
+    int ret;
+    MOVMeta meta;
+
+    memset(&meta, 0, sizeof(meta));
+
+    ret = mov_parse_urim_uri_data(pb, st, &meta);
+    if (ret)
+        return ret;
+
+    remaining -= avio_tell(pb) - pos;
+    ret = mov_parse_urim_conf_data(pb, st, remaining, &meta);
+
+    // all data has been collected; now build the actual side channel
+    // object from the collected data
+    if (ret == 0) {
+        int tmdLength = sizeof(AVTimedMetadataInfo) + meta.length + meta.conf.length;
+        AVTimedMetadataInfo *tmd = av_malloc(tmdLength);
+        if (!tmd) {
+            ret = -1;
+        } else {
+            AVPacketSideData *sd;
+            ret = av_reallocp_array(&st->side_data,
+                                    st->nb_side_data + 1, sizeof(*sd));
+            if (ret >= 0) {
+                char* data;
+
+                sd = st->side_data + st->nb_side_data;
+                st->nb_side_data++;
+
+                sd->type = AV_PKT_DATA_TIMED_METADATA_INFO;
+                sd->size = sizeof(*tmd) + meta.length + meta.conf.length;
+                sd->data = (uint8_t*) tmd;
+
+                tmd->meta_tag[0] = (meta.tag >> 0) & 0xff;
+                tmd->meta_tag[1] = (meta.tag >> 8) & 0xff;
+                tmd->meta_tag[2] = (meta.tag >> 16) & 0xff;
+                tmd->meta_tag[3] = (meta.tag >> 24) & 0xff;
+                tmd->meta_length = meta.length;
+                tmd->conf_tag[0] = (meta.conf.tag >> 0) & 0xff;
+                tmd->conf_tag[1] = (meta.conf.tag >> 8) & 0xff;
+                tmd->conf_tag[2] = (meta.conf.tag >> 16) & 0xff;
+                tmd->conf_tag[3] = (meta.conf.tag >> 24) & 0xff;
+                tmd->conf_length = meta.conf.length;
+                data = (char*) (tmd + 1);
+
+                memcpy(data, meta.data, meta.length);
+                data += meta.length;
+                memcpy(data, meta.conf.data, meta.conf.length);
+            } else {
+                av_freep(&tmd);
+            }
+        }
+    }
+    av_freep(&meta.data);
+    av_freep(&meta.conf.data);
+
+    return ret;
+}
+
 static int mov_parse_stsd_data(MOVContext *c, AVIOContext *pb,
                                 AVStream *st, MOVStreamContext *sc,
                                 int64_t size)
@@ -2098,6 +2237,8 @@ FF_ENABLE_DEPRECATION_WARNINGS
                 }
             }
         }
+    } else if (st->codecpar->codec_tag == MKTAG('u', 'r', 'i', 'm')) {
+        ret = mov_parse_urim_data(pb, st, size);
     } else {
         /* other codec type, just skip (rtp, mp4s ...) */
         avio_skip(pb, size);
