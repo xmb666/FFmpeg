@@ -27,6 +27,7 @@
 #include "avio.h"
 #include "internal.h"
 #include "dv.h"
+#include "movmeta.h"
 
 /* isom.c */
 extern const AVCodecTag ff_mp4_obj_type[];
