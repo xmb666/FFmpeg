@@ -4210,6 +4210,8 @@ static int mov_write_ftyp_tag(AVIOContext *pb, AVFormatContext *s)
 
     avio_wb32(pb, minor);
 
+    if (mov->mode == MODE_MP4 && mov->major_brand)
+        ffio_wfourcc(pb, mov->major_brand); /* write major brand as a compatible brand */
     if (mov->mode == MODE_MOV)
         ffio_wfourcc(pb, "qt  ");
     else if (mov->mode == MODE_ISM) {
