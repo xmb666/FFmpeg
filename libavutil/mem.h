@@ -514,6 +514,17 @@ char *av_strndup(const char *s, size_t len) av_malloc_attrib;
 void *av_memdup(const void *p, size_t size);
 
 /**
+ * Duplicate the array p. This array is compatible with the av_realloc
+ * functions.
+ * @param p array to be duplicated
+ * @param nmemb number of elements in the array
+ * @param size size of an element in the array
+ * @return Pointer to a newly allocated array containing a
+ * copy of p or NULL if the buffer cannot be allocated.
+ */
+void *av_arraydup(const void *p, size_t nmemb, size_t size);
+
+/**
  * Overlapping memcpy() implementation.
  *
  * @param dst  Destination buffer

@@ -307,6 +307,17 @@ void *av_memdup(const void *p, size_t size)
     return ptr;
 }
 
+void *av_arraydup(const void *p, size_t nmemb, size_t size)
+{
+    void *ptr = NULL;
+    if (p) {
+        ptr = av_realloc_array(NULL, nmemb, size);
+        if (ptr)
+            memcpy(ptr, p, nmemb * size);
+    }
+    return ptr;
+}
+
 int av_dynarray_add_nofree(void *tab_ptr, int *nb_ptr, void *elem)
 {
     void **tab;
