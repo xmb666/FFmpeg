@@ -357,6 +357,7 @@ const AVCodecTag ff_codec_movsubtitle_tags[] = {
 
 const AVCodecTag ff_codec_metadata_tags[] = {
     { AV_CODEC_ID_META, MKTAG('m', 'e', 't', 'a') },
+    { AV_CODEC_ID_META, MKTAG('u', 'r', 'i', 'm') },
     { AV_CODEC_ID_NONE, 0 },
 };
 
