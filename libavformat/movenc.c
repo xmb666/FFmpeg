@@ -1552,6 +1552,69 @@ static int mov_write_fiel_tag(AVIOContext *pb, MOVTrack *track, int field_order)
     return 10;
 }
 
+static int mov_write_urim_uri_box(AVIOContext *pb, const char *uri, int length)
+{
+    int64_t pos = avio_tell(pb);
+    avio_wb32(pb, 0);           /* size */
+    ffio_wfourcc(pb, "uri ");
+    avio_w8(pb, 0);             /* version */
+    avio_wb24(pb, 0);           /* flags */
+
+    avio_write(pb, uri, length); /* uri */
+    avio_w8(pb, 0);          /* null-terminated */
+
+    return update_size(pb, pos);
+}
+
+static int mov_write_conf_box(AVIOContext *pb, const uint8_t *data, int length, char* tag)
+{
+    int64_t pos = avio_tell(pb);
+    avio_wb32(pb, 0);           /* size */
+    ffio_wfourcc(pb, tag);
+
+    avio_w8(pb, 0);             /* version */
+    avio_wb24(pb, 0);           /* flags */
+
+    avio_write(pb, data, length); /* data */
+
+    return update_size(pb, pos);
+}
+
+static int mov_write_meta_codec(AVIOContext *pb, MOVTrack *track)
+{
+    int64_t pos = avio_tell(pb);
+
+    char *data;
+    char *tag;
+
+    AVTimedMetadata *meta =
+        (void*) av_stream_get_side_data(track->st, AV_PKT_DATA_TIMED_METADATA_INFO,
+                                        NULL);
+
+    av_assert0(meta);
+
+    avio_wb32(pb, 0);    /* size */
+    ffio_wfourcc(pb, meta->meta_tag);
+
+    avio_wb32(pb, 0);    /* Reserved */
+    avio_wb16(pb, 0);    /* Reserved */
+    avio_wb16(pb, 1);    /* Data-reference index */
+
+    data = (char*) (meta + 1);
+    tag = meta->meta_tag;
+    if (tag[0] == 'u' && tag[1] == 'r' && tag[2] == 'i' && tag[3] == 'm') {
+        mov_write_urim_uri_box(pb, data, meta->meta_length);
+        data += meta->meta_length;
+    }
+
+    if (meta->conf_length) {
+        mov_write_conf_box(pb, data, meta->conf_length, meta->conf_tag);
+        data += meta->conf_length;
+    }
+
+    return update_size(pb, pos);
+}
+
 static int mov_write_subtitle_tag(AVIOContext *pb, MOVTrack *track)
 {
     int64_t pos = avio_tell(pb);
@@ -1951,6 +2014,18 @@ static int mov_write_tmcd_tag(AVIOContext *pb, MOVTrack *track)
     return update_size(pb, pos);
 }
 
+static int mov_write_data_tag(AVIOContext *pb, MOVTrack *track)
+{
+    if (track->par->codec_id == AV_CODEC_ID_META)
+        return mov_write_meta_codec(pb, track);
+    else if (track->par->codec_tag == MKTAG('t','m','c','d'))
+        return mov_write_tmcd_tag(pb, track);
+    else if (track->par->codec_tag == MKTAG('r','t','p',' '))
+        return mov_write_rtp_tag(pb, track);
+    else
+        return 0;
+}
+
 static int mov_write_stsd_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContext *mov, MOVTrack *track)
 {
     int64_t pos = avio_tell(pb);
@@ -1962,12 +2037,10 @@ static int mov_write_stsd_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContext
         mov_write_video_tag(pb, mov, track);
     else if (track->par->codec_type == AVMEDIA_TYPE_AUDIO)
         mov_write_audio_tag(s, pb, mov, track);
+    else if (track->par->codec_type == AVMEDIA_TYPE_DATA)
+        mov_write_data_tag(pb, track);
     else if (track->par->codec_type == AVMEDIA_TYPE_SUBTITLE)
         mov_write_subtitle_tag(pb, track);
-    else if (track->par->codec_tag == MKTAG('r','t','p',' '))
-        mov_write_rtp_tag(pb, track);
-    else if (track->par->codec_tag == MKTAG('t','m','c','d'))
-        mov_write_tmcd_tag(pb, track);
     return update_size(pb, pos);
 }
 
@@ -2309,6 +2382,8 @@ static int mov_write_minf_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContext
         mov_write_vmhd_tag(pb);
     else if (track->par->codec_type == AVMEDIA_TYPE_AUDIO)
         mov_write_smhd_tag(pb);
+    else if (track->par->codec_type == AVMEDIA_TYPE_DATA)
+        mov_write_nmhd_tag(pb);
     else if (track->par->codec_type == AVMEDIA_TYPE_SUBTITLE) {
         if (track->tag == MKTAG('t','e','x','t') || is_clcp_track(track)) {
             mov_write_gmhd_tag(pb, track);

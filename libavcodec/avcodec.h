@@ -1349,6 +1349,16 @@ typedef struct AVCPBProperties {
  * @{
  */
 
+typedef struct AVTimedMetadata {
+    char        meta_tag[4];    /** 4cc describing this metadata box type */
+    int         meta_length;    /** length of data for the metadata type information */
+
+    char        conf_tag[4];    /** configurationg box type 4cc, ie. 'conf' */
+    int         conf_length;    /** length of the data for the configuration box */
+
+    /** followed by meta_length bytes of meta data followed by conf_length bytes of conf data */
+} AVTimedMetadata;
+
 typedef struct AVTrackReferences {
     char        tag[4];         /** 4cc used for describing this  */
     int         nb_tracks;      /** number of tracks */
@@ -1540,7 +1550,13 @@ enum AVPacketSideDataType {
      * (including the track list that follows it), for as long as
      * indicated by the key's length.
      */
-    AV_PKT_DATA_TRACK_REFERENCES
+    AV_PKT_DATA_TRACK_REFERENCES,
+
+    /**
+     * Configured the timed metadata parameters, such as the uri and
+     * meta data configuration. The key is of type AVTimedMetadata.
+     */
+    AV_PKT_DATA_TIMED_METADATA_INFO
 };
 
 #define AV_PKT_DATA_QUALITY_FACTOR AV_PKT_DATA_QUALITY_STATS //DEPRECATED
