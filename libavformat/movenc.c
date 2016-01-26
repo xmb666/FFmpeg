@@ -557,6 +557,83 @@ static unsigned compute_avg_bitrate(MOVTrack *track)
     return size * 8 * track->timescale / track->track_duration;
 }
 
+static int mov_write_chnl_tag(AVIOContext *pb, MOVTrack *track)
+{
+    AVAudioTrackChannelLayout *layout =
+        (void*) av_stream_get_side_data(track->st, AV_PKT_DATA_AUDIO_CHANNEL_LAYOUT,
+                                        NULL);
+
+    AVAudioTrackChannelPredefinedLayout *predefLayout =
+        (void*) av_stream_get_side_data(track->st, AV_PKT_DATA_AUDIO_CHANNEL_PREDEFINED_LAYOUT,
+                                        NULL);
+
+    AVAudioTrackChannelLayoutObjectStructured *objectStructured =
+        (void*) av_stream_get_side_data(track->st, AV_PKT_DATA_AUDIO_CHANNEL_LAYOUT_OBJECT_STRUCTURED,
+                                        NULL);
+
+    if (!layout && !predefLayout && !objectStructured) {
+        return 0;
+    } else {
+        int64_t pos = avio_tell(pb);
+
+        int channel_structured           = !!layout || !!predefLayout;
+
+        // ChannelConfiguration from ISO/IEC 23001-8
+        int defined_layout               = predefLayout ? predefLayout->layout : 0;
+        int channel_count                = track->par->channels;
+
+        int object_structured            = !!objectStructured;
+        int object_count                 = objectStructured ? objectStructured->object_count : 0;
+
+        int stream_structure             = (channel_structured << 0) | (object_structured << 1);
+
+        avio_wb32(pb, 0); // size
+        ffio_wfourcc(pb, "chnl");
+        avio_wb32(pb, 0); // Version
+
+        avio_w8(pb, stream_structure);
+
+        if (channel_structured) {
+            avio_w8(pb, defined_layout);
+            if (defined_layout == 0) {
+                AVAudioTrackChannelPosition* positions;
+                int i;
+                av_assert0(layout);
+                av_assert0(layout->nb_positions >= channel_count);
+
+                positions = (void*) (layout + 1);
+
+                for (i = 0; i < channel_count; ++i) {
+                    AVAudioTrackChannelPosition *pos = &positions[i];
+                    avio_w8(pb, pos->speaker_position);
+                    if (pos->speaker_position == 126) {
+                        avio_wb16(pb, pos->azimuth);
+                        avio_w8(pb, pos->elevation);
+                    }
+                }
+            } else {
+                int omitted_channels_map[64 / 8] = { 0 };
+                char* omitted_channels;
+                int i;
+                av_assert0(predefLayout);
+
+                omitted_channels = (void*) (predefLayout + 1);
+
+                for (i = 0; i < FFMIN(64, predefLayout->nb_omitted_channels); ++i) {
+                    omitted_channels_map[i / 8] |=
+                        ((!!omitted_channels[i]) << (i % 8));
+                }
+                for (i = 0; i < 64 / 8; ++i)
+                    avio_w8(pb, omitted_channels_map[i]);
+            }
+        }
+        if (object_structured)
+            avio_w8(pb, object_count);
+
+        return update_size(pb, pos);
+    }
+}
+
 static int mov_write_esds_tag(AVIOContext *pb, MOVTrack *track) // Basic
 {
     AVCPBProperties *props;
@@ -996,8 +1073,10 @@ static int mov_write_audio_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContex
          (mov_pcm_le_gt16(track->par->codec_id) && version==1) ||
          (mov_pcm_be_gt16(track->par->codec_id) && version==1)))
         mov_write_wave_tag(s, pb, track);
-    else if (track->tag == MKTAG('m','p','4','a'))
+    else if (track->tag == MKTAG('m','p','4','a')) {
+        mov_write_chnl_tag(pb, track);
         mov_write_esds_tag(pb, track);
+    }
     else if (track->par->codec_id == AV_CODEC_ID_AMR_NB)
         mov_write_amr_tag(pb, track);
     else if (track->par->codec_id == AV_CODEC_ID_AC3)

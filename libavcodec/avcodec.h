@@ -1365,6 +1365,35 @@ typedef struct AVTrackReferences {
     /** followed by: int tracks[nb_tracks]; -- tracks this track refers to */
 } AVTrackReferences;
 
+/** Describes the speaker position of a single audio channel of a single track */
+typedef struct AVAudioTrackChannelPosition {
+    int speaker_position; /** an OutputChannelPosition from ISO/IEC 23001-8 */
+
+    /** The following are used if speaker_position == 126 */
+    int azimuth;
+    int elevation;
+} AVAudioTrackChannelPosition;
+
+/** Describes the channel layout (ie. speaker position) of a single audio track */
+typedef struct AVAudioTrackChannelLayout {
+    int nb_positions;
+    /** followed by: AVAudioTrackChannelPosition positions[nb_positions]; */
+} AVAudioTrackChannelLayout;
+
+/** Describes the channel layout based on predefined layout of a single track
+    by providing the layout and the list of channels are are omitted */
+typedef struct AVAudioTrackChannelPredefinedLayout {
+    int layout;        /** ChannelConfiguration from ISO/IEC 23001-8 */
+    int nb_omitted_channels;
+    /** followed by: char omitted_channels[nb_omitted_channels]; - non-zero indicates the channel is omitted */
+} AVAudioTrackChannelPredefinedLayout;
+
+/** Describes the channel layout to be object-sturctued with given
+    number of objects */
+typedef struct AVAudioTrackChannelLayoutObjectStructured {
+    int object_count;
+} AVAudioTrackChannelLayoutObjectStructured;
+
 enum AVPacketSideDataType {
     AV_PKT_DATA_PALETTE,
 
@@ -1556,7 +1585,27 @@ enum AVPacketSideDataType {
      * Configured the timed metadata parameters, such as the uri and
      * meta data configuration. The key is of type AVTimedMetadata.
      */
-    AV_PKT_DATA_TIMED_METADATA_INFO
+    AV_PKT_DATA_TIMED_METADATA_INFO,
+
+    /**
+     * Channel layout, describing the position of spakers for the
+     * channels of a track, following the structure
+     * AVAudioTrackChannelLayout.
+     */
+    AV_PKT_DATA_AUDIO_CHANNEL_LAYOUT,
+
+    /**
+     * Predefined channel layout, describing the position of spakers
+     * for the channels of a track, following the structure
+     * AVAudioTrackChannelPredefinedLayout.
+     */
+    AV_PKT_DATA_AUDIO_CHANNEL_PREDEFINED_LAYOUT,
+
+    /**
+     * The channel layout is object structured with the number of objects in
+     * AVAudioTrackChannelLayoutObjectStructured
+     */
+    AV_PKT_DATA_AUDIO_CHANNEL_LAYOUT_OBJECT_STRUCTURED
 };
 
 #define AV_PKT_DATA_QUALITY_FACTOR AV_PKT_DATA_QUALITY_STATS //DEPRECATED
