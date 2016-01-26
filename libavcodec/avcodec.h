@@ -39,6 +39,7 @@
 #include "libavutil/log.h"
 #include "libavutil/pixfmt.h"
 #include "libavutil/rational.h"
+#include "libavutil/channel_layout_isoiec23001_8.h"
 
 #include "version.h"
 
@@ -1367,6 +1368,69 @@ typedef struct AVTrackReferences {
     /** followed by an optional gap for alignment purposes and another AVTrackReferences is applicaple */
 } AVTrackReferences;
 
+/**
+ * Describes the speaker position of a single audio channel of a single track
+ *
+ * The name is chosen in a slightly obscure manner as to allow a more
+ * natural name to take its place when the system supports FFmpeg's
+ * native channel positions.
+ */
+typedef struct AVAudioTrackChannelPositionISOIEC23001_8 {
+    AVSpeakerPositionISOIEC23001_8 speaker_position; /** an OutputChannelPosition from ISO/IEC 23001-8 */
+
+    /** The following are used if speaker_position == AV_SPEAKER_POSITION_ISOIEC23001_8_EXPL */
+    int16_t azimuth;            /** Degrees -180..180. Values increment counterclockwise from above. */
+    int8_t  elevation;          /** Degrees -90..90. >0 is above horizon. */
+} AVAudioTrackChannelPositionISOIEC23001_8;
+
+/**
+ * Describes the channel layout (ie. speaker position) of a single audio track
+ *
+ * The name is chosen in a slightly obscure manner as to allow a more
+ * natural name to take its place when the system supports FFmpeg's
+ * native channel positions.
+ */
+typedef struct AVAudioTrackChannelCompleteLayoutISOIEC23001_8 {
+    int nb_positions;
+    AVAudioTrackChannelPositionISOIEC23001_8 positions[64];
+} AVAudioTrackChannelCompleteLayoutISOIEC23001_8;
+
+/**
+ * Describes the channel layout based on predefined layout of a single
+ * track by providing the layout and the list of channels are are
+ * omitted. For example, you may choose a layout that has 6.1 channels
+ * and then choose to omit the LFE channel from your channels.
+ *
+ * The name is chosen in a slightly obscure manner as to allow a more natural 
+ * name to take its place when the system supports FFmpeg's native layouts.
+ */
+typedef struct AVAudioTrackChannelPredefinedLayoutISOIEC23001_8 {
+    AVChannelLayoutISOIEC23001_8  layout; /** ChannelConfiguration from ISO/IEC 23001-8 */
+    uint64_t omitted_channels;  /** lsb 1 means the first channel is omitted and so on */
+} AVAudioTrackChannelPredefinedLayoutISOIEC23001_8;
+
+typedef enum AVComplexAudioTrackChannelLayoutType {
+    AV_COMPLEX_CHANNEL_LAYOUT_OBJECTS_ONLY,
+    AV_COMPLEX_CHANNEL_LAYOUT_PREDEFINED_ISOIEC23001_8,
+    AV_COMPLEX_CHANNEL_LAYOUT_COMPLETE_ISOIEC23001_8,
+} AVComplexAudioTrackChannelLayoutType;
+
+typedef struct AVAudioTrackChannelLayout {
+    AVComplexAudioTrackChannelLayoutType type;
+    union {
+        AVAudioTrackChannelPredefinedLayoutISOIEC23001_8 predefined;
+        AVAudioTrackChannelCompleteLayoutISOIEC23001_8   complete;
+    };
+
+    /**
+     * Describes the channel layout to be object-structured with given
+     * number of objects. Object-structured audio is means to describe
+     * an audio scene without a fixed channel layout that can be mixed
+     * to varying channel configurations.
+     */
+    int nb_audio_objects; /** Number of audio objects */
+} AVAudioTrackChannelLayout;
+
 enum AVPacketSideDataType {
     AV_PKT_DATA_PALETTE,
 
@@ -1559,6 +1623,13 @@ enum AVPacketSideDataType {
      * meta data configuration. The value is of type AVTimedMetadataInfo.
      */
     AV_PKT_DATA_TIMED_METADATA_INFO,
+
+    /**
+     * Channel layout, describing the position of spakers for the
+     * channels of a track, following the structure
+     * AVAudioTrackChannelLayout.
+     */
+    AV_PKT_DATA_AUDIO_TRACK_CHANNEL_LAYOUT,
 };
 
 #define AV_PKT_DATA_QUALITY_FACTOR AV_PKT_DATA_QUALITY_STATS //DEPRECATED

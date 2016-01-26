@@ -557,6 +557,75 @@ static unsigned compute_avg_bitrate(MOVTrack *track)
     return size * 8 * track->timescale / track->track_duration;
 }
 
+static int mov_write_chnl_tag(AVIOContext *pb, MOVTrack *track)
+{
+    AVAudioTrackChannelLayout *side_data =
+        (void*) av_stream_get_side_data(track->st, AV_PKT_DATA_AUDIO_TRACK_CHANNEL_LAYOUT,
+                                        NULL);
+
+    AVAudioTrackChannelPredefinedLayoutISOIEC23001_8 *predefined =
+        side_data->type == AV_COMPLEX_CHANNEL_LAYOUT_PREDEFINED_ISOIEC23001_8
+        ? &side_data->predefined
+        : NULL;
+
+    AVAudioTrackChannelCompleteLayoutISOIEC23001_8 *complete =
+        side_data->type == AV_COMPLEX_CHANNEL_LAYOUT_COMPLETE_ISOIEC23001_8
+        ? &side_data->complete
+        : NULL;
+
+    int object_count = side_data->nb_audio_objects;
+
+    if (!predefined && !complete && !object_count) {
+        return 0;
+    } else {
+        int64_t pos = avio_tell(pb);
+
+        int channel_structured           = predefined || complete;
+        int object_structured            = !!object_count;
+
+        // ChannelConfiguration from ISO/IEC 23001-8
+        int defined_layout               = predefined ? predefined->layout : 0;
+        int channel_count                = track->par->channels;
+
+        int stream_structure             = (channel_structured << 0) | (object_structured << 1);
+
+        avio_wb32(pb, 0); // size
+        ffio_wfourcc(pb, "chnl");
+        avio_wb32(pb, 0); // Version
+
+        avio_w8(pb, stream_structure);
+
+        if (channel_structured) {
+            avio_w8(pb, defined_layout);
+            if (defined_layout == 0) {
+                AVAudioTrackChannelPositionISOIEC23001_8* positions;
+                int i;
+                av_assert0(complete);
+                av_assert0(complete->nb_positions >= channel_count);
+
+                positions = complete->positions;
+
+                for (i = 0; i < channel_count; ++i) {
+                    AVAudioTrackChannelPositionISOIEC23001_8 *pos = &positions[i];
+                    avio_w8(pb, pos->speaker_position);
+                    if (pos->speaker_position == 126) {
+                        avio_wb16(pb, pos->azimuth);
+                        avio_w8(pb, pos->elevation);
+                    }
+                }
+            } else {
+                av_assert0(predefined);
+
+                avio_wb64(pb, predefined->omitted_channels);
+            }
+        }
+        if (object_structured)
+            avio_w8(pb, object_count);
+
+        return update_size(pb, pos);
+    }
+}
+
 static int mov_write_esds_tag(AVIOContext *pb, MOVTrack *track) // Basic
 {
     AVCPBProperties *props;
@@ -996,8 +1065,10 @@ static int mov_write_audio_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContex
          (mov_pcm_le_gt16(track->par->codec_id) && version==1) ||
          (mov_pcm_be_gt16(track->par->codec_id) && version==1)))
         mov_write_wave_tag(s, pb, track);
-    else if (track->tag == MKTAG('m','p','4','a'))
+    else if (track->tag == MKTAG('m','p','4','a')) {
+        mov_write_chnl_tag(pb, track);
         mov_write_esds_tag(pb, track);
+    }
     else if (track->par->codec_id == AV_CODEC_ID_AMR_NB)
         mov_write_amr_tag(pb, track);
     else if (track->par->codec_id == AV_CODEC_ID_AC3)
