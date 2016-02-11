@@ -1630,6 +1630,17 @@ enum AVPacketSideDataType {
      * AVAudioTrackChannelLayout.
      */
     AV_PKT_DATA_AUDIO_TRACK_CHANNEL_LAYOUT,
+
+    /**
+     * Assign alternate groups for tracks. An example of alternate
+     * groups would be audio tracks (or video tracks) that are
+     * alternative to each other. Each alternative track shares the
+     * same non-zero alternate group.
+     *
+     * The content is:
+     * uint: The alternate group of this track
+     */
+    AV_PKT_DATA_TRACK_ALTERNATE_GROUP,
 };
 
 #define AV_PKT_DATA_QUALITY_FACTOR AV_PKT_DATA_QUALITY_STATS //DEPRECATED
