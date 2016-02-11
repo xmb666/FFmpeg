@@ -2579,6 +2579,8 @@ static int mov_write_tkhd_tag(AVIOContext *pb, MOVMuxContext *mov,
     int flags   = MOV_TKHD_FLAG_IN_MOVIE;
     int rotation = 0;
     int group   = 0;
+    int *alternate_group = NULL;
+    int alternate_group_size;
 
     uint32_t *display_matrix = NULL;
     int      display_matrix_size, i;
@@ -2593,6 +2595,13 @@ static int mov_write_tkhd_tag(AVIOContext *pb, MOVMuxContext *mov,
                                                             &display_matrix_size);
         if (display_matrix && display_matrix_size < 9 * sizeof(*display_matrix))
             display_matrix = NULL;
+    }
+
+    if (st) {
+        alternate_group = (int*) av_stream_get_side_data(st, AV_PKT_DATA_TRACK_ALTERNATE_GROUP,
+                                                         &alternate_group_size);
+        if (alternate_group && alternate_group_size >= sizeof(int))
+            group = *alternate_group;
     }
 
     if (track->flags & MOV_TRACK_ENABLED)
