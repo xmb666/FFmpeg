@@ -1045,7 +1045,13 @@ static int mov_write_audio_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContex
                 avio_wb16(pb, 16);
             avio_wb16(pb, track->audio_vbr ? -2 : 0); /* compression ID */
         } else { /* reserved for mp4/3gp */
-            avio_wb16(pb, 2);
+            /* parsing chln box requires the proper number of channels having been
+               written into the audio header */
+            if (av_stream_get_side_data(track->st, AV_PKT_DATA_AUDIO_TRACK_CHANNEL_LAYOUT,
+                                        NULL))
+                avio_wb16(pb, track->par->channels);
+            else
+                avio_wb16(pb, 2);
             avio_wb16(pb, 16);
             avio_wb16(pb, 0);
         }
