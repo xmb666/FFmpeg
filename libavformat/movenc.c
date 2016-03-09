@@ -1039,7 +1039,7 @@ static int mov_write_audio_tag(AVFormatContext *s, AVIOContext *pb, MOVMuxContex
                 avio_wb16(pb, 16);
             avio_wb16(pb, track->audio_vbr ? -2 : 0); /* compression ID */
         } else { /* reserved for mp4/3gp */
-            avio_wb16(pb, 2);
+            avio_wb16(pb, track->par->channels);
             avio_wb16(pb, 16);
             avio_wb16(pb, 0);
         }
