@@ -2965,6 +2965,14 @@ static const AVCodecDescriptor codec_descriptors[] = {
         .mime_types= MT("application/octet-stream"),
     },
 
+    {
+        .id        = AV_CODEC_ID_META,
+        .type      = AVMEDIA_TYPE_DATA,
+        .name      = "meta_data",
+        .long_name = NULL_IF_CONFIG_SMALL("binary data"),
+        .mime_types= MT("application/octet-stream"),
+    },
+
     /* deprecated codec ids */
 };
 
