@@ -17,7 +17,26 @@ version <next>:
 - acrusher audio filter
 - bitplanenoise video filter
 - floating point support in als decoder
-
+- libavutil/mem: added av_arraydup to accompany av_realloc*_array functions
+- libavformat/utils: added ability to probe AVMEDIA_TYPE_DATA format
+- libavformat/movenc: added ability to use original stream ids as track ids instead of regenerating them
+- libavcodec: added a structure AVData for decoding timed metadata
+- libavformat/movenc: mov_write_ftyp_tag: write the major brand a compatible brand
+- libavcodec/avcodec.h: AV_CODEC_ID_META added for timed meta data
+- libavcodec/metaenc: added an encoder/decoder for timed metadata
+- libavformat/movenc: deal with AVMEDIA_TYPE_DATA by using AV_CODEC_ID_META
+- libavformat/movenc: support for embedding timed metadata
+- libavformat/movenc: add the urim sample descriptor
+- libavformat/movenc, isom: support metadata in mp4 files
+- libavformat/mov, isom: read (multiple) track references (tag and multiple ids)
+- libavformat/mov: support for identifying (and reading) timed metadata (urim)
+- libavformat/mov: added support for AVMEDIA_TYPE_DATA
+- libavcodec/avcodec, libavformat/movenc: support embedding channel layout to stream side data
+- libavcodec: introduced AV_PKT_DATA_TRACK_ALTERNATE_GROUP side data for expressing alternate groups
+- libavformat/movenc: support for setting explicit alternate group for a track
+- libavformat/movenc: mov_write_audio_tag writes the proper number of channels, not the hardcoded 2
+- doc/examples/extract_timed_metadata: added a bare-bones metadata extractor
+- doc/examples/muxing_with_metadata: example for dealing with timed meta data
 
 version 3.1:
 - DXVA2-accelerated HEVC Main10 decoding
