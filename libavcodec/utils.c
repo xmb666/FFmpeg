@@ -2737,6 +2737,10 @@ static int do_decode(AVCodecContext *avctx, AVPacket *pkt)
     } else if (avctx->codec_type == AVMEDIA_TYPE_AUDIO) {
         ret = avcodec_decode_audio4(avctx, avctx->internal->buffer_frame,
                                     &got_frame, pkt);
+    } else if (avctx->codec_type == AVMEDIA_TYPE_DATA) {
+        ret = avctx->codec->decode(avctx, avctx->internal->buffer_frame, &got_frame, pkt);
+        if (ret == 0 && got_frame)
+            ret = pkt->size;
     } else {
         ret = AVERROR(EINVAL);
     }
