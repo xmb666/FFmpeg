@@ -2880,6 +2880,8 @@ static int do_encode(AVCodecContext *avctx, const AVFrame *frame, int *got_packe
     } else if (avctx->codec_type == AVMEDIA_TYPE_AUDIO) {
         ret = avcodec_encode_audio2(avctx, avctx->internal->buffer_pkt,
                                     frame, got_packet);
+    } else if (avctx->codec_type == AVMEDIA_TYPE_DATA) {
+        ret = avctx->codec->encode2(avctx, avctx->internal->buffer_pkt, frame, got_packet);
     } else {
         ret = AVERROR(EINVAL);
     }
