@@ -17,7 +17,17 @@ version <next>:
 - acrusher audio filter
 - bitplanenoise video filter
 - floating point support in als decoder
-
+- Added support for muxing and demuxing timed metadata tracks
+  (AV_CODEC_ID_META of type AMEDIA_TYPE_DATA). With examples.
+- Added side data AV_PKT_DATA_TRACK_ALTERNATE_GROUP for exlicitly
+  setting the alternate track groups (supported by isom)
+- Added support for multiple track reference types as well as
+  multiple tracks references by such track references (supported
+  by isom for both reading and writing)
+- Added support for setting advanced audio channel track layout
+  with side data AV_PKT_DATA_AUDIO_TRACK_CHANNEL_LAYOUT
+- Added ability to set stream ids directly as track numbers in
+  ISO media files with option "use_stream_ids_as_track_ids"
 
 version 3.1:
 - DXVA2-accelerated HEVC Main10 decoding
