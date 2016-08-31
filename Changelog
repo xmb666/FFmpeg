@@ -18,6 +18,15 @@ version <next>:
 - bitplanenoise video filter
 - floating point support in als decoder
 
+- Added support for muxing and demuxing timed metadata tracks
+  (AV_CODEC_ID_META of type AMEDIA_TYPE_DATA). With examples.
+- Added side data AV_PKT_DATA_TRACK_ALTERNATE_GROUP for explicitly
+  setting the alternate track groups (supported by isom)
+- Added support for multiple track reference types as well as
+  multiple tracks references by such track references (supported
+  by isom for both reading and writing)
+- Added support for setting and parsing advanced audio channel track
+  layout with side data AV_PKT_DATA_AUDIO_TRACK_CHANNEL_LAYOUT
 
 version 3.1:
 - DXVA2-accelerated HEVC Main10 decoding
