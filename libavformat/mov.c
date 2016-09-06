@@ -915,6 +915,101 @@ static int mov_read_chan(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     return 0;
 }
 
+static int mov_read_chnl(MOVContext *c, AVIOContext *pb, MOVAtom atom)
+{
+    AVStream *st;
+    AVAudioTrackChannelLayout *side_data;
+    uint8_t stream_structure;
+    uint8_t channel_structured;
+    uint8_t object_structured;
+
+    // ChannelConfiguration from ISO/IEC 23001-8
+    AVChannelLayoutISOIEC23001_8 defined_layout;
+    int expected_size = 0;
+
+    if (c->fc->nb_streams < 1)
+        return 0;
+    st = c->fc->streams[c->fc->nb_streams-1];
+
+    expected_size += 4;
+    if (atom.size < expected_size)
+        return 0;
+
+    /* skip version */
+    avio_skip(pb, 4);
+
+    side_data = (void*) av_stream_new_side_data(st, AV_PKT_DATA_AUDIO_TRACK_CHANNEL_LAYOUT,
+                                                sizeof(AVAudioTrackChannelLayout));
+
+    if (!side_data)
+        return AVERROR(ENOMEM);
+
+    side_data->type = AV_COMPLEX_CHANNEL_LAYOUT_OBJECTS_ONLY;
+    side_data->nb_audio_objects = 0;
+
+    expected_size += 1;
+    if (atom.size < expected_size)
+        return 0;
+
+    stream_structure = avio_r8(pb);
+    channel_structured = stream_structure & 1;
+    object_structured = stream_structure & 2;
+    if (channel_structured) {
+        expected_size += 1;
+        if (atom.size < expected_size)
+            return 0;
+
+        defined_layout = (AVChannelLayoutISOIEC23001_8) avio_r8(pb);
+        if (defined_layout == 0) {
+            int channel_count = st->codecpar->channels;
+            for (int i = 0; i < channel_count; ++i) {
+                AVAudioTrackChannelPositionISOIEC23001_8 *position = &side_data->complete.positions[i];
+                AVSpeakerPositionISOIEC23001_8 speaker_position;
+
+                expected_size += 1;
+                if (atom.size < expected_size)
+                    return 0;
+
+                speaker_position = (AVSpeakerPositionISOIEC23001_8) avio_r8(pb);
+                position->speaker_position = speaker_position;
+                if (speaker_position == AV_SPEAKER_POSITION_ISOIEC23001_8_EXPL) {
+                    expected_size += 3;
+                    if (atom.size < expected_size)
+                        return 0;
+
+                    position->azimuth = avio_rb16(pb);
+                    position->elevation = avio_r8(pb);
+
+                    if (position->azimuth < -180 || position->azimuth > 180 ||
+                        position->elevation < -90 || position->elevation > 90) {
+                        return 0;
+                    }
+                } else {
+                    position->azimuth = 0;
+                    position->elevation = 0;
+                }
+            }
+            side_data->type = AV_COMPLEX_CHANNEL_LAYOUT_COMPLETE_ISOIEC23001_8;
+            side_data->complete.nb_positions = channel_count;
+        } else {
+            expected_size += 8;
+            if (atom.size < expected_size)
+                return 0;
+            side_data->predefined.omitted_channels = avio_rb64(pb);
+            side_data->type = AV_COMPLEX_CHANNEL_LAYOUT_PREDEFINED_ISOIEC23001_8;
+            side_data->predefined.layout = defined_layout;
+        }
+        if (object_structured) {
+            expected_size += 1;
+            if (atom.size < expected_size)
+                return 0;
+            side_data->nb_audio_objects = avio_r8(pb);
+        }
+    }
+
+    return 0;
+}
+
 static int mov_read_wfex(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 {
     AVStream *st;
@@ -4696,6 +4791,7 @@ static const MOVParseTableEntry mov_default_parse_table[] = {
 { MKTAG('w','f','e','x'), mov_read_wfex },
 { MKTAG('c','m','o','v'), mov_read_cmov },
 { MKTAG('c','h','a','n'), mov_read_chan }, /* channel layout */
+{ MKTAG('c','h','n','l'), mov_read_chnl }, /* channel layout ISO/IEC 23001-8 */
 { MKTAG('d','v','c','1'), mov_read_dvc1 },
 { MKTAG('s','b','g','p'), mov_read_sbgp },
 { MKTAG('h','v','c','C'), mov_read_glbl },
