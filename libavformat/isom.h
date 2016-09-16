@@ -243,6 +243,7 @@ typedef struct MOVContext {
     uint8_t *decryption_key;
     int decryption_key_len;
     int enable_drefs;
+    int read_alternate_group;
 } MOVContext;
 
 int ff_mp4_read_descr_len(AVIOContext *pb);

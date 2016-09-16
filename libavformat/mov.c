@@ -3786,6 +3786,7 @@ static int mov_read_tkhd(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     MOVStreamContext *sc;
     int version;
     int flags;
+    int alternate_group;
 
     if (c->fc->nb_streams < 1)
         return 0;
@@ -3812,7 +3813,7 @@ static int mov_read_tkhd(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     avio_rb32(pb); /* reserved */
 
     avio_rb16(pb); /* layer */
-    avio_rb16(pb); /* alternate group */
+    alternate_group = avio_rb16(pb);
     avio_rb16(pb); /* volume */
     avio_rb16(pb); /* reserved */
 
@@ -3877,6 +3878,17 @@ static int mov_read_tkhd(MOVContext *c, AVIOContext *pb, MOVAtom atom)
                 disp_transform[0] / disp_transform[1],
                 INT_MAX);
     }
+
+    if (c->read_alternate_group) {
+        int *alternate_group_side =
+            (int*) av_stream_new_side_data(st, AV_PKT_DATA_TRACK_ALTERNATE_GROUP,
+                                           sizeof(int));
+        if (!alternate_group_side)
+            return AVERROR(ENOMEM);
+
+        *alternate_group_side = alternate_group;
+    }
+
     return 0;
 }
 
@@ -5930,6 +5942,8 @@ static const AVOption mov_options[] = {
     { "decryption_key", "The media decryption key (hex)", OFFSET(decryption_key), AV_OPT_TYPE_BINARY, .flags = AV_OPT_FLAG_DECODING_PARAM },
     { "enable_drefs", "Enable external track support.", OFFSET(enable_drefs), AV_OPT_TYPE_BOOL,
         {.i64 = 0}, 0, 1, FLAGS },
+    {"read_alternate_group", "", OFFSET(read_alternate_group), AV_OPT_TYPE_BOOL, {.i64 = 0},
+        0, 1, FLAGS},
 
     { NULL },
 };
